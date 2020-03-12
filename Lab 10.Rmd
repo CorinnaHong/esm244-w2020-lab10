@@ -1,0 +1,182 @@
+---
+title: "Lab 10"
+author: "Corinna Hong"
+date: "March 12, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(DBI)
+library(RSQLite)
+
+```
+
+
+### Connect to database and tell R we are using SQLite
+
+```{r}
+
+lter_db <- DBI::dbConnect(drv = RSQLite::SQLite(),
+                          dbname = here("data","marine.sqlite")) # Use SQLite engine as our driver and connect to marine.sqlite database
+
+```
+
+
+### What tables existin the database?
+To check what tables exist by the names, use `DBI::dbListTables()`
+
+```{r}
+
+DBI::dbListTables(lter_db)
+
+```
+
+
+### Which varables are in a database table?
+Use `DBI::dbListFields()`
+
+```{r}
+
+DBI::dbListFields(lter_db, "fish_data") # What are cols in fish data?
+DBI::dbListFields(lter_db, "inverts_data")
+DBI::dbListFields(lter_db, "lobsters_data")
+
+```
+
+
+### Read in database table as an R data frame
+Ues `DBI::dbReadTable()`
+
+```{r}
+
+fish_df <- DBI::dbReadTable(lter_db, "fish_data") # It is not an R data frame!
+
+```
+
+
+### Query a database using SQL
+- SELECT: gets columns
+- FROM: what table in a database to get something from
+- Use * to indicate "get all"
+
+```{sql connection=lter_db}
+
+SELECT * FROM fish_data
+
+```
+
+To get a subset of columns, we can just list them after SELECT, separated by a comma
+
+```{sql connection=lter_db}
+
+SELECT year, site FROM fish_data
+
+```
+
+To get ROWS (observations) that match a given condition we set, use WHERE
+
+```{sql connection=lter_db}
+
+SELECT * FROM fish_data WHERE year == 2016
+
+```
+
+Query to keep columns, but only if the common_name variable matches "garibaldi"
+
+```{sql connection=lter_db}
+
+SELECT common_name, site FROM fish_data WHERE common_name == "garibaldi"
+
+```
+
+Query to keep observations where common_name == "garibaldi" AND site == "mohk"
+
+```{sql connection=lter_db}
+
+SELECT * FROM fish_data WHERE common_name == "garibaldi" AND site == "mohk"
+
+```
+
+Query to keep obervations where year is 2017 OR site is "abur"
+
+```{sql connection=lter_db}
+
+SELECT * FROM fish_data WHERE year == "2017" OR site == "abur"
+
+```
+
+
+### Store an output for SQL Querying
+Add in code chunk header, `output.var = "name_object"`
+
+```{sql connection=lter_db, output.var = "fish_2017_df"}
+
+SELECT * FROM fish_data WHERE year == 2017
+
+```
+
+
+### Query using SQL from an R code chunk
+`DBI::dbSendQuery()`
+
+```{r}
+
+garibaldi <- dbSendQuery(lter_db, "SELECT * FROM fish_data WHERE common_name == 'garibaldi'") # put SQL code in quotations, use single quotations so R doesn't get mad with nested double quotations
+
+gar_df <- dbFetch(garibaldi) # Turn it into a df!
+
+```
+
+
+### Querying using dplyr-ish code
+`dbplyr` don;t need to tall it, R knows to use it
+
+```{r}
+
+fish_tbl <- tbl(lter_db, "fish_data")
+
+
+# Wrangle the table
+yearly_fish <- fish_tbl %>% 
+  group_by(year) %>% 
+  summarize(
+    total_fish = sum(total_count)
+  )
+
+yearly_fish %>% show_query() # Tells you what SQL code you need to input into an SQL chunk to get it to do the same thing as the above dbplyr code
+
+yearly_fish %>% collect() # Gives you outcome of SQL code
+
+```
+
+
+### Update a SQL database
+Ues `DBI::dbWriteTable` and `DBI::dbRemoveTable` functions
+
+```{r}
+
+DBI::dbWriteTable(lter_db, "mtcars_df", mtcars) # tell it which db to add it to, what to name it, and what R calls it
+
+# Did it work?
+DBI::dbListTables(lter_db)
+
+# Remove it
+DBI::dbRemoveTable(lter_db, "mtcars_df")
+
+```
+
+
+
+
+
+
+
